@@ -232,7 +232,7 @@ def aplicar_formatacao_dre(ws_dre, num_colunas=12):
             c.alignment = alinhamento_num
 
 
-def construir_estrutura_dre(ws_dre, num_colunas=12):
+def construir_estrutura_dre(workbook, ws_dre, num_colunas=12):
     linha = 4
     ws_dre.cell(row=linha, column=2).value = 'Receita '
     for i in range(num_colunas):
@@ -451,24 +451,17 @@ def construir_estrutura_dre(ws_dre, num_colunas=12):
     # --- Juros (-) ---
     linha = 38
     ws_dre.cell(row=linha, column=2).value = 'Juros (-)'
-    wb = openpyxl.load_workbook("entrada.xlsx")
-    if 'Financiamento' in wb.sheetnames:
-        ws_fin = wb['Financiamento']
-        # Detecta a primeira linha com valores válidos na coluna D
-        inicio_financiamento = 1
-        for i, celula in enumerate(ws_fin['D'], start=1):
-            if celula.value not in (None, 0):
-                inicio_financiamento = i
-                break
-        coluna_inicio_fin = 10  # Coluna J na aba Financiamento
+    if 'Financiamento' in workbook.sheetnames:
         for i in range(num_colunas):
-            col = 4 + i  # Coluna correspondente no DRE
-
-            if i + 1 >= inicio_financiamento:
-                col_letra_fin = get_column_letter(coluna_inicio_fin + (i - (inicio_financiamento - 1)))
-                formula = f'=IFERROR(-Financiamento!{col_letra_fin}$5, 0)'
-            else:
-                formula = '0'
+            col = 4 + i
+            col_letra = get_column_letter(col)
+            # This formula dynamically finds the interest for the correct month.
+            # It assumes interest values are in row 5 and dates are in row 4 of the 'Financiamento' sheet.
+            formula = (
+                f'=-SUMIFS(Financiamento!$J$5:$AZ$5, '
+                f'Financiamento!$J$4:$AZ$4, ">="&EOMONTH(DRE!{col_letra}$3,-1)+1, '
+                f'Financiamento!$J$4:$AZ$4, "<="&EOMONTH(DRE!{col_letra}$3,0))'
+            )
             ws_dre.cell(row=linha, column=col).value = formula
     else:
         print("⚠ Aviso: Aba 'Financiamento' não encontrada. Juros (-) permanecerão zerados.")
@@ -798,7 +791,7 @@ def automatizar_dre(caminho_arquivo='entrada.xlsx', data_inicial=None, num_meses
         configurar_cabecalho_dre(ws_dre, data_inicial, num_meses)
 
         print(f"\nConstruindo estrutura da DRE...")
-        construir_estrutura_dre(ws_dre, num_meses)
+        construir_estrutura_dre(wb, ws_dre, num_meses)
 
         print(f"\nCalculando waterfall de depreciação...")
         calcular_waterfall_depreciacao(wb, data_inicial, num_meses)
